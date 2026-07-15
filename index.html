@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Funnel Chart Replica</title>
+    <!-- Muat Tableau Extension API -->
+    <script src="./tableau.extensions.1.15.0.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .chart-wrapper {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        /* Style untuk polygon stage */
+        .funnel-stage {
+            cursor: pointer;
+            transition: filter 0.3s ease, opacity 0.3s ease;
+        }
+        .funnel-stage:hover {
+            filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+            opacity: 0.95;
+        }
+        .funnel-stage.selected {
+            stroke: #000;
+            stroke-width: 2px;
+            filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.3));
+        }
+        /* Label styling */
+        .stage-label-title {
+            font-size: 13px;
+            font-weight: 700;
+            fill: #ffffff;
+            pointer-events: none;
+            text-anchor: middle;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+        }
+        .stage-label-value {
+            font-size: 11px;
+            font-weight: 500;
+            fill: rgba(255, 255, 255, 0.9);
+            pointer-events: none;
+            text-anchor: middle;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+        }
+        .rate-label {
+            font-size: 11px;
+            font-weight: 600;
+            fill: #475569;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+        /* Tooltip styling */
+        .custom-tooltip {
+            position: absolute;
+            display: none;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            pointer-events: none;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            line-height: 1.5;
+            min-width: 140px;
+        }
+        .tooltip-title {
+            font-weight: 700;
+            font-size: 13px;
+            margin-bottom: 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding-bottom: 4px;
+        }
+        /* Error Screen */
+        #error-msg {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            max-width: 420px;
+            width: 85%;
+            margin: auto;
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        #error-msg .icon {
+            font-size: 36px;
+            margin-bottom: 16px;
+            display: block;
+        }
+        #error-msg .title {
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #ea580c;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="error-msg">
+        <span class="icon">⚙️</span>
+        <div class="title" id="error-title">Konfigurasi Diperlukan</div>
+        <div id="error-text">Silakan lakukan konfigurasi ekstensi terlebih dahulu (Pilih Mark Type -> <b>Configure</b>).</div>
+    </div>
+
+    <div class="chart-wrapper">
+        <svg id="funnelSvg"></svg>
+        <div class="custom-tooltip" id="tooltip"></div>
+    </div>
+
+    <script>
+        let selectedStageName = null;
+        let currentPayload = {};
+        let rawDataList = []; // Array dari { stage: name, value: number, formattedValue: string }
+
+        // Inisialisasi Ekstensi Tableau
+        if (typeof tableau !== 'undefined' && tableau.extensions) {
+            tableau.extensions.initializeAsync({ 'configure': configure }).then(() => {
+                renderFunnelFromTableau();
+                
+                // Pasang event listener worksheet
+                const worksheet = tableau.extensions.worksheetContent.worksheet;
+                worksheet.addEventListener(tableau.TableauEventType.FilterChanged, renderFunnelFromTableau);
+                worksheet.addEventListener(tableau.TableauEventType.SummaryDataChanged, renderFunnelFromTableau);
+            }).catch((err) => {
+                console.log("Tableau initialization failed. Running in Demo Mode.", err);
+                setTimeout(renderFunnelMock, 100);
+            });
+        } else {
+            console.log("Menjalankan dalam mode Demo (di luar Tableau)");
+            setTimeout(renderFunnelMock, 100);
+        }
+
+        // Popup dialog konfigurasi
+        function configure() {
+            const popupUrl = new URL('config.html?v=' + Date.now(), window.location.href).href;
+            
+            // Ekstrak nama stage unik untuk dikirim ke config dialog
+            const activeStages = rawDataList.map(d => d.stage);
+            const payload = JSON.stringify({ activeStages: activeStages });
+            
+            tableau.extensions.ui.displayDialogAsync(popupUrl, payload, {
+                height: 560,
+                width: 600
+            }).then(() => {
+                renderFunnelFromTableau();
+            }).catch((error) => {
+                if (error.errorCode !== tableau.ErrorCodes.DialogClosedByUser) {
+                    console.error("Gagal membuka dialog:", error.message);
+                }
+            });
+        }
+
+        function showError(message, title = "Kesalahan Ekstensi") {
+            document.getElementById('error-title').innerText = title;
+            document.getElementById('error-text').innerHTML = message;
+            document.getElementById('error-msg').style.display = 'block';
+            document.querySelector('.chart-wrapper').style.display = 'none';
+        }
+
+        function hideError() {
+            document.getElementById('error-msg').style.display = 'none';
+            document.querySelector('.chart-wrapper').style.display = 'flex';
+        }
+
+        function getFieldName(encoding) {
+            if (!encoding) return null;
+            if (encoding.field) return encoding.field.name;
+            if (encoding.fields && encoding.fields.length > 0) return encoding.fields[0].name;
+            return null;
+        }
+
+        async function renderFunnelFromTableau() {
+            // Ambil Pengaturan UI
+            const settings = tableau.extensions.settings.getAll();
+            const worksheet = tableau.extensions.worksheetContent.worksheet;
+            if (!worksheet) {
+                showError("Tidak dapat terhubung dengan worksheet aktif.", "Error Worksheet");
+                return;
+            }
+
+            try {
+                const visualSpec = await worksheet.getVisualSpecificationAsync();
+                if (!visualSpec.marksSpecifications || visualSpec.marksSpecifications.length === 0) {
+                    showError("Tidak ada spesifikasi marks yang ditemukan.", "Konfigurasi Diperlukan");
+                    return;
+                }
+
+                const marksSpec = visualSpec.marksSpecifications[visualSpec.activeMarksSpecificationIndex];
+                const encodings = marksSpec.encodings;
+
+                const stageEncoding = encodings.find(e => e.id === 'stage');
+                const valueEncoding = encodings.find(e => e.id === 'value');
+
+                const stageFieldName = getFieldName(stageEncoding);
+                const valueFieldName = getFieldName(valueEncoding);
+
+                if (!stageFieldName || !valueFieldName) {
+                    showError("Harap seret data ke rak <b>Stage (Required)</b> dan <b>Value (Required)</b> pada Marks Card.", "Posisikan Kolom Data");
+                    return;
+                }
+
+                const dataTable = await worksheet.getSummaryDataAsync({ ignoreSelection: true });
+                
+                const stageCol = dataTable.columns.find(col => col.fieldName === stageFieldName);
+                const valueCol = dataTable.columns.find(col => col.fieldName === valueFieldName);
+
+                if (!stageCol || !valueCol) {
+                    showError("Kolom tidak dapat dicocokkan dengan data tabel.", "Kolom Tidak Ditemukan");
+                    return;
+                }
+
+                // Ekstrak data mentah
+                rawDataList = dataTable.data.map(row => {
+                    return {
+                        stage: row[stageCol.index].formattedValue,
+                        value: parseFloat(row[valueCol.index].value) || 0,
+                        formattedValue: row[valueCol.index].formattedValue
+                    };
+                });
+
+                // Penting: Di Funnel Chart, kita ikuti urutan worksheet,
+                // tapi jika kosong, tidak ada data
+                if (rawDataList.length === 0) {
+                    showError("Tidak ada baris data yang ditemukan.", "Data Kosong");
+                    return;
+                }
+
+                hideError();
+                drawFunnelChart(rawDataList, settings, stageFieldName);
+
+            } catch (err) {
+                showError("Gagal mengambil data dari Tableau: " + err.message, "Gagal Mengambil Data");
+            }
+        }
+
+        // Rendisi Fallback Demo Browser
+        function renderFunnelMock() {
+            hideError();
+            rawDataList = [
+                { stage: "Lead", value: 12000, formattedValue: "12,000" },
+                { stage: "MQL", value: 9000, formattedValue: "9,000" },
+                { stage: "SQL", value: 6500, formattedValue: "6,500" },
+                { stage: "Opportunity", value: 4000, formattedValue: "4,000" },
+                { stage: "Closed Won", value: 2500, formattedValue: "2,500" }
+            ];
+
+            // Load mock settings dari local storage jika ada
+            const settings = {
+                orientation: localStorage.getItem("funnel_orientation") || 'vertical',
+                alignment: localStorage.getItem("funnel_alignment") || 'center',
+                shapeStyle: localStorage.getItem("funnel_shapeStyle") || 'curved',
+                gap: localStorage.getItem("funnel_gap") || '10',
+                valueFormat: localStorage.getItem("funnel_valueFormat") || 'number',
+                showConversion: localStorage.getItem("funnel_showConversion") || 'true',
+                showRetention: localStorage.getItem("funnel_showRetention") || 'true',
+                stageColors: localStorage.getItem("funnel_stageColors"),
+                stageLabels: localStorage.getItem("funnel_stageLabels")
+            };
+
+            drawFunnelChart(rawDataList, settings, "Stage");
+        }
+
+        // Utama: Menggambar Funnel Chart dengan SVG
+        function drawFunnelChart(data, settings, stageFieldName) {
+            const svg = document.getElementById('funnelSvg');
+            svg.innerHTML = ''; // Bersihkan SVG
+
+            // Filter out stages with 0 or negative values (jika ada) untuk kestabilan funnel
+            const validData = data.filter(d => d.value > 0);
+            if (validData.length === 0) {
+                return;
+            }
+
+            const totalStages = validData.length;
+            const orientation = settings.orientation || 'vertical';
+            const alignment = settings.alignment || 'center';
+            const shapeStyle = settings.shapeStyle || 'curved';
+            const gap = parseFloat(settings.gap) !== undefined ? parseFloat(settings.gap) : 10;
+            const valueFormat = settings.valueFormat || 'number';
+            const showConversion = settings.showConversion !== 'false';
+            const showRetention = settings.showRetention !== 'false';
+
+            // Custom styling
+            let stageColors = {};
+            let stageLabels = {};
+            try { stageColors = JSON.parse(settings.stageColors || '{}'); } catch(e) {}
+            try { stageLabels = JSON.parse(settings.stageLabels || '{}'); } catch(e) {}
+
+            const DEFAULT_COLORS = ['#ea580c', '#f97316', '#fb923c', '#fdba74', '#fed7aa', '#ffedd5'];
+
+            // Sizing container
+            const rect = svg.getBoundingClientRect();
+            const width = rect.width || 600;
+            const height = rect.height || 500;
+
+            const maxValue = validData[0].value; // Angka awal funnel
+
+            // Format nilai numerik kustom
+            function formatVal(val, rawFormatted) {
+                if (valueFormat === 'currency') {
+                    return 'Rp ' + val.toLocaleString('id-ID');
+                } else if (valueFormat === 'percentage') {
+                    return val.toFixed(1) + '%';
+                }
+                return val.toLocaleString();
+            }
+
+            // Hitung koordinat tahap
+            const stageCoords = [];
+
+            if (orientation === 'vertical') {
+                // Aliran Vertikal (Top-Down)
+                const usableHeight = height - (totalStages - 1) * gap;
+                const stageHeight = usableHeight / totalStages;
+                const maxFunnelWidth = width * 0.85;
+
+                for (let i = 0; i < totalStages; i++) {
+                    const currentVal = validData[i].value;
+                    const nextVal = (i < totalStages - 1) ? validData[i+1].value : currentVal * 0.65; // Taper flat di akhir
+
+                    const wTop = maxFunnelWidth * (currentVal / maxValue);
+                    const wBottom = maxFunnelWidth * (nextVal / maxValue);
+
+                    const yTop = i * (stageHeight + gap);
+                    const yBottom = yTop + stageHeight;
+
+                    let xTopLeft, xTopRight, xBottomLeft, xBottomRight;
+
+                    if (alignment === 'left') {
+                        xTopLeft = 20;
+                        xTopRight = 20 + wTop;
+                        xBottomLeft = 20;
+                        xBottomRight = 20 + wBottom;
+                    } else if (alignment === 'right') {
+                        xTopLeft = width - 20 - wTop;
+                        xTopRight = width - 20;
+                        xBottomLeft = width - 20 - wBottom;
+                        xBottomRight = width - 20;
+                    } else {
+                        // Center
+                        xTopLeft = (width - wTop) / 2;
+                        xTopRight = (width + wTop) / 2;
+                        xBottomLeft = (width - wBottom) / 2;
+                        xBottomRight = (width + wBottom) / 2;
+                    }
+
+                    stageCoords.push({
+                        index: i,
+                        stageRaw: validData[i].stage,
+                        stageName: stageLabels[validData[i].stage] || validData[i].stage,
+                        value: currentVal,
+                        formattedValue: formatVal(currentVal, validData[i].formattedValue),
+                        xTopLeft, xTopRight, xBottomLeft, xBottomRight,
+                        yTop, yBottom,
+                        wTop, wBottom
+                    });
+                }
+            } else {
+                // Aliran Horizontal (Left-Right)
+                const usableWidth = width - (totalStages - 1) * gap;
+                const stageWidth = usableWidth / totalStages;
+                const maxFunnelHeight = height * 0.8;
+
+                // Untuk perataan horizontal:
+                // Left -> Atas (Top-Aligned), Right -> Bawah (Bottom-Aligned), Center -> Symmetrical
+                for (let i = 0; i < totalStages; i++) {
+                    const currentVal = validData[i].value;
+                    const nextVal = (i < totalStages - 1) ? validData[i+1].value : currentVal * 0.65;
+
+                    const hLeft = maxFunnelHeight * (currentVal / maxValue);
+                    const hRight = maxFunnelHeight * (nextVal / maxValue);
+
+                    const xLeft = i * (stageWidth + gap);
+                    const xRight = xLeft + stageWidth;
+
+                    let yTopLeft, yBottomLeft, yTopRight, yBottomRight;
+
+                    if (alignment === 'left') {
+                        // Top-Aligned
+                        yTopLeft = 20;
+                        yBottomLeft = 20 + hLeft;
+                        yTopRight = 20;
+                        yBottomRight = 20 + hRight;
+                    } else if (alignment === 'right') {
+                        // Bottom-Aligned
+                        yTopLeft = height - 20 - hLeft;
+                        yBottomLeft = height - 20;
+                        yTopRight = height - 20 - hRight;
+                        yBottomRight = height - 20;
+                    } else {
+                        // Center Symmetrical
+                        yTopLeft = (height - hLeft) / 2;
+                        yBottomLeft = (height + hLeft) / 2;
+                        yTopRight = (height - hRight) / 2;
+                        yBottomRight = (height + hRight) / 2;
+                    }
+
+                    stageCoords.push({
+                        index: i,
+                        stageRaw: validData[i].stage,
+                        stageName: stageLabels[validData[i].stage] || validData[i].stage,
+                        value: currentVal,
+                        formattedValue: formatVal(currentVal, validData[i].formattedValue),
+                        xLeft, xRight,
+                        yTopLeft, yBottomLeft, yTopRight, yBottomRight,
+                        hLeft, hRight
+                    });
+                }
+            }
+
+            // Rangkai Defs untuk efek 3D overlay gradient
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const overlayGrad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+            overlayGrad.setAttribute('id', 'funnelGlass');
+            overlayGrad.setAttribute('x1', '0%');
+            overlayGrad.setAttribute('y1', '0%');
+            overlayGrad.setAttribute('x2', '100%');
+            overlayGrad.setAttribute('y2', '100%');
+
+            const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+            stop1.setAttribute('offset', '0%');
+            stop1.setAttribute('stop-color', '#ffffff');
+            stop1.setAttribute('stop-opacity', '0.25');
+
+            const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+            stop2.setAttribute('offset', '100%');
+            stop2.setAttribute('stop-color', '#000000');
+            stop2.setAttribute('stop-opacity', '0.2');
+
+            overlayGrad.appendChild(stop1);
+            overlayGrad.appendChild(stop2);
+            defs.appendChild(overlayGrad);
+            svg.appendChild(defs);
+
+            // Gambar tiap stage
+            stageCoords.forEach((stage, idx) => {
+                const color = stageColors[stage.stageRaw] || DEFAULT_COLORS[idx % DEFAULT_COLORS.length];
+                
+                // Buat group utama untuk stage
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('class', 'funnel-stage' + (selectedStageName === stage.stageRaw ? ' selected' : ''));
+                g.setAttribute('data-stage', stage.stageRaw);
+
+                // Buat path utama
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                let pathStr = '';
+
+                if (orientation === 'vertical') {
+                    if (shapeStyle === 'curved') {
+                        const midY = (stage.yTop + stage.yBottom) / 2;
+                        pathStr = `M ${stage.xTopLeft} ${stage.yTop} ` +
+                                  `L ${stage.xTopRight} ${stage.yTop} ` +
+                                  `C ${stage.xTopRight} ${midY}, ${stage.xBottomRight} ${midY}, ${stage.xBottomRight} ${stage.yBottom} ` +
+                                  `L ${stage.xBottomLeft} ${stage.yBottom} ` +
+                                  `C ${stage.xBottomLeft} ${midY}, ${stage.xTopLeft} ${midY}, ${stage.xTopLeft} ${stage.yTop} Z`;
+                    } else {
+                        // Straight
+                        pathStr = `M ${stage.xTopLeft} ${stage.yTop} ` +
+                                  `L ${stage.xTopRight} ${stage.yTop} ` +
+                                  `L ${stage.xBottomRight} ${stage.yBottom} ` +
+                                  `L ${stage.xBottomLeft} ${stage.yBottom} Z`;
+                    }
+                } else {
+                    // Horizontal
+                    if (shapeStyle === 'curved') {
+                        const midX = (stage.xLeft + stage.xRight) / 2;
+                        pathStr = `M ${stage.xLeft} ${stage.yTopLeft} ` +
+                                  `C ${midX} ${stage.yTopLeft}, ${midX} ${stage.yTopRight}, ${stage.xRight} ${stage.yTopRight} ` +
+                                  `L ${stage.xRight} ${stage.yBottomRight} ` +
+                                  `C ${midX} ${stage.yBottomRight}, ${midX} ${stage.yBottomLeft}, ${stage.xLeft} ${stage.yBottomLeft} Z`;
+                    } else {
+                        // Straight
+                        pathStr = `M ${stage.xLeft} ${stage.yTopLeft} ` +
+                                  `L ${stage.xRight} ${stage.yTopRight} ` +
+                                  `L ${stage.xRight} ${stage.yBottomRight} ` +
+                                  `L ${stage.xLeft} ${stage.yBottomLeft} Z`;
+                    }
+                }
+
+                path.setAttribute('d', pathStr);
+                path.setAttribute('fill', color);
+                g.appendChild(path);
+
+                // Buat 3D Overlay path
+                const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                overlay.setAttribute('d', pathStr);
+                overlay.setAttribute('fill', 'url(#funnelGlass)');
+                g.appendChild(overlay);
+
+                // Rangkai text label
+                let textX, textY;
+                if (orientation === 'vertical') {
+                    textX = (stage.xTopLeft + stage.xTopRight + stage.xBottomLeft + stage.xBottomRight) / 4;
+                    textY = (stage.yTop + stage.yBottom) / 2;
+                } else {
+                    textX = (stage.xLeft + stage.xRight) / 2;
+                    textY = (stage.yTopLeft + stage.yBottomLeft + stage.yTopRight + stage.yBottomRight) / 4;
+                }
+
+                const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                titleText.setAttribute('x', textX);
+                titleText.setAttribute('y', textY - 4);
+                titleText.setAttribute('class', 'stage-label-title');
+                titleText.textContent = stage.stageName;
+                g.appendChild(titleText);
+
+                const valueText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                valueText.setAttribute('x', textX);
+                valueText.setAttribute('y', textY + 12);
+                valueText.setAttribute('class', 'stage-label-value');
+                valueText.textContent = stage.formattedValue;
+                g.appendChild(valueText);
+
+                // Kembangkan badge conversion rate di antara stage jika ada gap besar
+                // ATAU di samping stage. Di sini kita letakkan di dalam gap itu sendiri
+                if (idx < totalStages - 1 && gap >= 6) {
+                    const nextStage = stageCoords[idx + 1];
+                    const conversion = ((nextStage.value / stage.value) * 100).toFixed(1) + '%';
+                    const retention = ((nextStage.value / maxValue) * 100).toFixed(1) + '%';
+
+                    let gapX, gapY;
+                    let displayStr = '';
+                    if (showConversion && showRetention) {
+                        displayStr = `Conv: ${conversion} | Ret: ${retention}`;
+                    } else if (showConversion) {
+                        displayStr = `Conversion: ${conversion}`;
+                    } else if (showRetention) {
+                        displayStr = `Retention: ${retention}`;
+                    }
+
+                    if (displayStr) {
+                        const gapText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        if (orientation === 'vertical') {
+                            gapX = width / 2;
+                            gapY = stage.yBottom + gap / 2 + 4;
+                        } else {
+                            gapX = stage.xRight + gap / 2;
+                            gapY = height - 12; // letakkan di bagian bawah
+                            gapText.setAttribute('transform', `rotate(-90, ${gapX}, ${gapY})`);
+                        }
+                        gapText.setAttribute('x', gapX);
+                        gapText.setAttribute('y', gapY);
+                        gapText.setAttribute('class', 'rate-label');
+                        gapText.textContent = displayStr;
+                        svg.appendChild(gapText);
+                    }
+                }
+
+                // Event handling untuk detail tooltip & filter klik
+                g.addEventListener('mousemove', (e) => {
+                    const tooltip = document.getElementById('tooltip');
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = (e.clientX - rect.left + 15) + 'px';
+                    tooltip.style.top = (e.clientY - rect.top + 15) + 'px';
+
+                    // Hitung metrik rate untuk tooltip
+                    const prevStage = (idx > 0) ? stageCoords[idx - 1] : null;
+                    const convRate = prevStage ? ((stage.value / prevStage.value) * 100).toFixed(1) + '%' : '100.0%';
+                    const retRate = ((stage.value / maxValue) * 100).toFixed(1) + '%';
+
+                    tooltip.innerHTML = `
+                        <div class="tooltip-title">${stage.stageName}</div>
+                        <strong>Nilai:</strong> ${stage.formattedValue}<br>
+                        <strong>Conversion:</strong> ${convRate}<br>
+                        <strong>Retention:</strong> ${retRate}
+                    `;
+                });
+
+                g.addEventListener('mouseleave', () => {
+                    document.getElementById('tooltip').style.display = 'none';
+                });
+
+                g.addEventListener('click', () => {
+                    toggleSelection(stage.stageRaw, stageFieldName);
+                });
+
+                svg.appendChild(g);
+            });
+        }
+
+        // Mengatur status seleksi & filter asinkron ke Tableau
+        function toggleSelection(stageName, stageFieldName) {
+            if (selectedStageName === stageName) {
+                // Clear selection
+                selectedStageName = null;
+                if (typeof tableau !== 'undefined' && tableau.extensions) {
+                    tableau.extensions.worksheetContent.worksheet.clearSelectedMarksAsync();
+                }
+            } else {
+                selectedStageName = stageName;
+                if (typeof tableau !== 'undefined' && tableau.extensions) {
+                    tableau.extensions.worksheetContent.worksheet.selectMarksByValueAsync([
+                        {
+                            fieldName: stageFieldName,
+                            value: stageName
+                        }
+                    ], tableau.SelectionUpdateType.Replace);
+                }
+            }
+
+            // Render ulang visual dengan style penegasan terpilih (selected)
+            if (typeof tableau !== 'undefined' && tableau.extensions) {
+                renderFunnelFromTableau();
+            } else {
+                renderFunnelMock();
+            }
+        }
+    </script>
+</body>
+</html>

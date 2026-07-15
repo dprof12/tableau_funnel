@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Funnel Chart Configuration</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="./tableau.extensions.1.15.0.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 20px;
+            font-size: 14px;
+            background: #f8fafc;
+            color: #1e293b;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+            max-width: 580px;
+            width: 100%;
+        }
+        h3 {
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 20px;
+        }
+        .section-title {
+            font-weight: 600;
+            margin-top: 18px;
+            margin-bottom: 12px;
+            border-left: 4px solid #f97316;
+            padding-left: 8px;
+            color: #f97316;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .grid-custom {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        label {
+            font-weight: 500;
+            color: #475569;
+            font-size: 13px;
+        }
+        select, input[type="text"], input[type="number"], input[type="range"] {
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            padding: 9px 12px;
+            font-size: 14px;
+            font-family: inherit;
+            background-color: #f8fafc;
+            color: #0f172a;
+            transition: all 0.2s ease-in-out;
+            width: 100%;
+            outline: none;
+        }
+        select:focus, input[type="text"]:focus, input[type="number"]:focus {
+            border-color: #f97316;
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.15);
+            background-color: #ffffff;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 6px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #f97316;
+            cursor: pointer;
+        }
+        .checkbox-group label {
+            cursor: pointer;
+            user-select: none;
+        }
+        .stage-config-row {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .stage-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #1e293b;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .stage-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            width: 100%;
+            height: 38px;
+            cursor: pointer;
+            background: none;
+            padding: 0;
+            overflow: hidden;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch {
+            border: none;
+            border-radius: 6px;
+        }
+        .range-value {
+            font-weight: 600;
+            color: #0f172a;
+            margin-left: auto;
+        }
+        .range-label-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        button.btn-save {
+            background-color: #f97316;
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 15px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+            margin-top: 20px;
+            box-shadow: 0 4px 6px -1px rgba(249, 115, 22, 0.2), 0 2px 4px -2px rgba(249, 115, 22, 0.2);
+        }
+        button.btn-save:hover {
+            background-color: #ea580c;
+            transform: translateY(-1px);
+            box-shadow: 0 10px 15px -3px rgba(249, 115, 22, 0.3);
+        }
+        button.btn-save:active {
+            transform: translateY(0);
+        }
+        hr {
+            margin: 20px 0;
+            border: 0;
+            border-top: 1px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+
+    <main class="container">
+        <h3>🔥 Pengaturan Funnel Chart</h3>
+        
+        <div class="section-title">Tata Letak (Layout)</div>
+        <div class="grid-custom">
+            <div class="form-group">
+                <label for="orientation">Arah Aliran (Orientation):</label>
+                <select id="orientation" onchange="toggleOrientation(this.value)">
+                    <option value="vertical">Vertikal (Top-Down)</option>
+                    <option value="horizontal">Horizontal (Left-Right)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="alignment" id="alignmentLabel">Perataan (Alignment):</label>
+                <select id="alignment">
+                    <option value="center">Tengah (Symmetrical)</option>
+                    <option value="left">Kiri (Left-Aligned)</option>
+                    <option value="right">Kanan (Right-Aligned)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="grid-custom">
+            <div class="form-group">
+                <label for="shapeStyle">Gaya Bentuk (Shape Style):</label>
+                <select id="shapeStyle">
+                    <option value="curved">Melengkung (Smooth Bezier)</option>
+                    <option value="straight">Lurus (Trapezoid)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <div class="range-label-container">
+                    <label for="gapRange">Jarak Antar Tahap (Gap):</label>
+                    <span id="gapVal" class="range-value">10px</span>
+                </div>
+                <input type="range" id="opacityRange" min="0" max="30" step="2" value="10" oninput="updateGapLabel(this.value)">
+            </div>
+        </div>
+
+        <div class="section-title">Informasi & Format</div>
+        <div class="grid-custom">
+            <div class="form-group">
+                <label for="valueFormat">Format Angka:</label>
+                <select id="valueFormat">
+                    <option value="number">Angka Bulat / Desimal (1,000)</option>
+                    <option value="currency">Mata Uang Rupiah (Rp)</option>
+                    <option value="percentage">Persentase (%)</option>
+                </select>
+            </div>
+            <div class="form-group" style="justify-content: center;">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="showConversion" checked>
+                    <label for="showConversion">Tampilkan Conversion Rate</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="showRetention" checked>
+                    <label for="showRetention">Tampilkan Retention Rate</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title">Kustomisasi Tahapan (Stages)</div>
+        <div id="stages-configuration-container">
+            <!-- Diisi secara dinamis tergantung stage yang aktif -->
+        </div>
+
+        <hr>
+        <button class="btn-save" onclick="saveConfiguration()">Simpan Pengaturan</button>
+    </main>
+
+    <script>
+        let activeStages = [];
+        let savedSettings = {};
+
+        // Palet warna default premium (warm, transition/funnel friendly)
+        const DEFAULT_COLORS = ['#ea580c', '#f97316', '#fb923c', '#fdba74', '#fed7aa', '#ffedd5'];
+
+        // Inisialisasi jendela dialog
+        if (typeof tableau !== 'undefined' && tableau.extensions && tableau.extensions.initializeDialogAsync) {
+            tableau.extensions.initializeDialogAsync().then((initialPayload) => {
+                savedSettings = tableau.extensions.settings.getAll();
+                
+                if (initialPayload) {
+                    try {
+                        const parsed = JSON.parse(initialPayload);
+                        if (parsed && Array.isArray(parsed.activeStages)) {
+                            activeStages = parsed.activeStages;
+                        }
+                    } catch (e) {
+                        console.error("Gagal men-parse payload:", e);
+                    }
+                }
+
+                initForm();
+            });
+        } else {
+            console.log("Menjalankan dalam mode Demo (di luar Tableau)");
+            activeStages = ["Lead", "MQL", "SQL", "Opportunity", "Closed Won"];
+            initForm();
+        }
+
+        function updateGapLabel(val) {
+            document.getElementById('gapVal').innerText = val + 'px';
+        }
+
+        function toggleOrientation(val) {
+            const alignmentSelect = document.getElementById('alignment');
+            const alignmentLabel = document.getElementById('alignmentLabel');
+            if (val === 'horizontal') {
+                alignmentLabel.innerText = "Perataan (Alignment):";
+                alignmentSelect.innerHTML = `
+                    <option value="center">Tengah (Symmetrical)</option>
+                    <option value="left">Atas (Top-Aligned)</option>
+                    <option value="right">Bawah (Bottom-Aligned)</option>
+                `;
+            } else {
+                alignmentLabel.innerText = "Perataan (Alignment):";
+                alignmentSelect.innerHTML = `
+                    <option value="center">Tengah (Symmetrical)</option>
+                    <option value="left">Kiri (Left-Aligned)</option>
+                    <option value="right">Kanan (Right-Aligned)</option>
+                `;
+            }
+        }
+
+        function initForm() {
+            // Muat setting umum
+            if (savedSettings.orientation) {
+                document.getElementById('orientation').value = savedSettings.orientation;
+                toggleOrientation(savedSettings.orientation);
+            }
+            if (savedSettings.alignment) document.getElementById('alignment').value = savedSettings.alignment;
+            if (savedSettings.shapeStyle) document.getElementById('shapeStyle').value = savedSettings.shapeStyle;
+            if (savedSettings.gap) {
+                document.getElementById('opacityRange').value = savedSettings.gap;
+                updateGapLabel(savedSettings.gap);
+            }
+            if (savedSettings.valueFormat) document.getElementById('valueFormat').value = savedSettings.valueFormat;
+            if (savedSettings.showConversion !== undefined) {
+                document.getElementById('showConversion').checked = (savedSettings.showConversion === 'true');
+            }
+            if (savedSettings.showRetention !== undefined) {
+                document.getElementById('showRetention').checked = (savedSettings.showRetention === 'true');
+            }
+
+            // Muat setting warna dan label per stage
+            let stageColors = {};
+            let stageLabels = {};
+            if (savedSettings.stageColors) {
+                try { stageColors = JSON.parse(savedSettings.stageColors); } catch(e) {}
+            }
+            if (savedSettings.stageLabels) {
+                try { stageLabels = JSON.parse(savedSettings.stageLabels); } catch(e) {}
+            }
+
+            const container = document.getElementById('stages-configuration-container');
+            container.innerHTML = '';
+
+            if (activeStages.length === 0) {
+                container.innerHTML = '<div style="padding: 10px; color: #ef4444; font-weight: 500;">Silakan tarik data ke rak Stage dan Value terlebih dahulu.</div>';
+                return;
+            }
+
+            activeStages.forEach((stage, idx) => {
+                const savedColor = stageColors[stage] || DEFAULT_COLORS[idx % DEFAULT_COLORS.length];
+                const savedLabel = stageLabels[stage] || stage;
+
+                const row = document.createElement('div');
+                row.className = 'stage-config-row';
+
+                const title = document.createElement('div');
+                title.className = 'stage-title';
+                const dot = document.createElement('span');
+                dot.className = 'stage-dot';
+                dot.style.backgroundColor = savedColor;
+                dot.id = `dot_${idx}`;
+                title.appendChild(dot);
+                title.appendChild(document.createTextNode(`Tahap ${idx + 1}: ${stage}`));
+                row.appendChild(title);
+
+                const grid = document.createElement('div');
+                grid.className = 'grid-custom';
+
+                // Label Input
+                const fgLabel = document.createElement('div');
+                fgLabel.className = 'form-group';
+                const lblLabel = document.createElement('label');
+                lblLabel.htmlFor = `label_${idx}`;
+                lblLabel.innerText = 'Label Tampilan:';
+                const inputLabel = document.createElement('input');
+                inputLabel.type = 'text';
+                inputLabel.id = `label_${idx}`;
+                inputLabel.value = savedLabel;
+                inputLabel.setAttribute('data-stage', stage);
+                fgLabel.appendChild(lblLabel);
+                fgLabel.appendChild(inputLabel);
+
+                // Color Input
+                const fgColor = document.createElement('div');
+                fgColor.className = 'form-group';
+                const lblColor = document.createElement('label');
+                lblColor.htmlFor = `color_${idx}`;
+                lblColor.innerText = 'Warna Area:';
+                const inputColor = document.createElement('input');
+                inputColor.type = 'color';
+                inputColor.id = `color_${idx}`;
+                inputColor.value = savedColor;
+                inputColor.oninput = function() {
+                    document.getElementById(`dot_${idx}`).style.backgroundColor = this.value;
+                };
+                fgColor.appendChild(lblColor);
+                fgColor.appendChild(inputColor);
+
+                grid.appendChild(fgLabel);
+                grid.appendChild(fgColor);
+                row.appendChild(grid);
+                container.appendChild(row);
+            });
+        }
+
+        // Menyimpan setting
+        function saveConfiguration() {
+            const orientationVal = document.getElementById('orientation').value;
+            const alignmentVal = document.getElementById('alignment').value;
+            const shapeStyleVal = document.getElementById('shapeStyle').value;
+            const gapVal = document.getElementById('opacityRange').value;
+            const valueFormatVal = document.getElementById('valueFormat').value;
+            const showConversionVal = document.getElementById('showConversion').checked ? 'true' : 'false';
+            const showRetentionVal = document.getElementById('showRetention').checked ? 'true' : 'false';
+
+            const stageColors = {};
+            const stageLabels = {};
+
+            activeStages.forEach((stage, idx) => {
+                const colorInput = document.getElementById(`color_${idx}`);
+                const labelInput = document.getElementById(`label_${idx}`);
+                if (colorInput) stageColors[stage] = colorInput.value;
+                if (labelInput) stageLabels[stage] = labelInput.value;
+            });
+
+            if (typeof tableau !== 'undefined' && tableau.extensions && tableau.extensions.settings) {
+                tableau.extensions.settings.set("orientation", orientationVal);
+                tableau.extensions.settings.set("alignment", alignmentVal);
+                tableau.extensions.settings.set("shapeStyle", shapeStyleVal);
+                tableau.extensions.settings.set("gap", gapVal);
+                tableau.extensions.settings.set("valueFormat", valueFormatVal);
+                tableau.extensions.settings.set("showConversion", showConversionVal);
+                tableau.extensions.settings.set("showRetention", showRetentionVal);
+                
+                tableau.extensions.settings.set("stageColors", JSON.stringify(stageColors));
+                tableau.extensions.settings.set("stageLabels", JSON.stringify(stageLabels));
+
+                tableau.extensions.settings.saveAsync().then(() => {
+                    tableau.extensions.ui.closeDialog("Sukses");
+                });
+            } else {
+                // Mode demo local storage
+                localStorage.setItem("funnel_orientation", orientationVal);
+                localStorage.setItem("funnel_alignment", alignmentVal);
+                localStorage.setItem("funnel_shapeStyle", shapeStyleVal);
+                localStorage.setItem("funnel_gap", gapVal);
+                localStorage.setItem("funnel_valueFormat", valueFormatVal);
+                localStorage.setItem("funnel_showConversion", showConversionVal);
+                localStorage.setItem("funnel_showRetention", showRetentionVal);
+                localStorage.setItem("funnel_stageColors", JSON.stringify(stageColors));
+                localStorage.setItem("funnel_stageLabels", JSON.stringify(stageLabels));
+
+                alert("Pengaturan Disimpan dalam Mode Demo browser.");
+                // Jika jendela dialog dibuka via window.open, kita bisa close
+                if (window.opener) {
+                    window.close();
+                }
+            }
+        }
+    </script>
+</body>
+</html>
