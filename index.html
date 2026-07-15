@@ -302,6 +302,7 @@
                 valueFormat: localStorage.getItem("funnel_valueFormat") || 'number',
                 showConversion: localStorage.getItem("funnel_showConversion") || 'true',
                 showRetention: localStorage.getItem("funnel_showRetention") || 'true',
+                sortByValue: localStorage.getItem("funnel_sortByValue") || 'true',
                 stageColors: localStorage.getItem("funnel_stageColors"),
                 stageLabels: localStorage.getItem("funnel_stageLabels")
             };
@@ -321,6 +322,7 @@
             const valueFormat = settings.valueFormat || 'number';
             const showConversion = settings.showConversion !== 'false';
             const showRetention = settings.showRetention !== 'false';
+            const sortByValue = settings.sortByValue !== 'false';
 
             // Custom styling
             let stageColors = {};
@@ -380,8 +382,13 @@
                 const groupData = hasGroups ? data.filter(d => d.group === groupName) : data;
                 
                 // Filter stage bernilai positif
-                const validGroupData = groupData.filter(d => d.value > 0);
+                let validGroupData = groupData.filter(d => d.value > 0);
                 if (validGroupData.length === 0) continue;
+
+                // Urutkan jika sortByValue bernilai true
+                if (sortByValue) {
+                    validGroupData.sort((a, b) => b.value - a.value);
+                }
 
                 const totalStages = validGroupData.length;
                 const maxValue = validGroupData[0].value; // Nilai awal funnel di group ini
@@ -396,7 +403,7 @@
 
                     const usableHeight = height - 55 - (totalStages - 1) * gap;
                     const stageHeight = usableHeight / totalStages;
-                    const maxFunnelWidth = colWidth * 0.85;
+                    const maxFunnelWidth = colWidth * 0.70;
 
                     // Menggambar judul group
                     if (hasGroups) {
@@ -461,7 +468,7 @@
                     const leftStartX = hasGroups ? 100 : 20;
                     const usableWidth = width - leftStartX - 40 - (totalStages - 1) * gap;
                     const stageWidth = usableWidth / totalStages;
-                    const maxFunnelHeight = rowHeight * 0.8;
+                    const maxFunnelHeight = rowHeight * 0.7;
 
                     // Menggambar judul group
                     if (hasGroups) {
